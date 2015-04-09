@@ -81,23 +81,22 @@ namespace BuildingCoder
 
       // Select two walls and the dimension line point:
 
-      Selection sel = uidoc.Selection;
-      ReferenceArray refs = new ReferenceArray();
+      ReferenceArray wallReferences = new ReferenceArray();
 
       try
       {
         //WallSelectionFilter f
         //  = new WallSelectionFilter();
 
-        ISelectionFilter f
+        ISelectionFilter wallSelectionFilter
           = new JtElementsOfClassSelectionFilter<Wall>();
 
-        refs.Append( sel.PickObject(
-          ObjectType.Element, f,
+        wallReferences.Append(uidoc.Selection.PickObject(
+          ObjectType.Element, wallSelectionFilter,
           "Please select first wall" ) );
 
-        refs.Append( sel.PickObject(
-          ObjectType.Element, f,
+        wallReferences.Append(uidoc.Selection.PickObject(
+          ObjectType.Element, wallSelectionFilter,
           "Please pick dimension line "
           + "point on second wall" ) );
 
@@ -118,36 +117,34 @@ namespace BuildingCoder
       // and a point on each wall for distance
       // calculations:
 
-      Wall[] walls = new Wall[2];
-      List<int> ids = new List<int>( 2 );
-      XYZ[] pts = new XYZ[2];
-      Line[] lines = new Line[2];
-      IntersectionResult ir;
+      var walls = new Wall[2];
+      var ids = new List<int>( 2 );
+      var pts = new XYZ[2];
+      var lines = new Line[2];
+      IntersectionResult intersections;
       XYZ normal = null;
-      int i = 0;
+      int wallReferenceIdx = 0;
 
-      foreach( Reference r in refs )
+      foreach( Reference wallReference in wallReferences )
       {
         // 'Autodesk.Revit.DB.Reference.Element' is
         // obsolete: Property will be removed. Use
         // Document.GetElement(Reference) instead.
         //Wall wall = r.Element as Wall; // 2011
 
-        Wall wall = doc.GetElement( r ) as Wall; // 2012
+        var wall = doc.GetElement( wallReference ) as Wall; // 2012
 
-        walls[i] = wall;
+        walls[wallReferenceIdx] = wall;
         ids.Add( wall.Id.IntegerValue );
 
         // Obtain location curve and
         // check that it is straight:
 
-        LocationCurve lc = wall.Location
-          as LocationCurve;
+        LocationCurve wallLocation = wall.Location as LocationCurve;
 
-        Curve curve = lc.Curve;
-        lines[i] = curve as Line;
+        lines[wallReferenceIdx] = wallLocation.Curve as Line;
 
-        if( null == lines[i] )
+        if( null == lines[wallReferenceIdx] )
         {
           message = _prompt;
           return Result.Failed;
@@ -159,12 +156,12 @@ namespace BuildingCoder
 
         if( null == normal )
         {
-          normal = Util.Normal( lines[i] );
+          normal = Util.Normal( lines[wallReferenceIdx] );
         }
         else
         {
           if( !Util.IsParallel( normal,
-            Util.Normal( lines[i] ) ) )
+            Util.Normal( lines[wallReferenceIdx] ) ) )
           {
             message = _prompt;
             return Result.Failed;
@@ -174,36 +171,35 @@ namespace BuildingCoder
         // Obtain pick points and project
         // onto wall location lines:
 
-        XYZ p = r.GlobalPoint;
-        ir = lines[i].Project( p );
+        intersections = lines[wallReferenceIdx].Project(wallReference.GlobalPoint);
 
-        if( null == ir )
+        if( null == intersections )
         {
           message = string.Format(
             "Unable to project pick point {0} "
             + "onto wall location line.",
-            i );
+            wallReferenceIdx );
 
           return Result.Failed;
         }
 
-        pts[i] = ir.XYZPoint;
+        pts[wallReferenceIdx] = intersections.XYZPoint;
 
         Debug.Print(
           "Wall {0} id {1} at {2}, {3} --> point {4}",
-          i, wall.Id.IntegerValue,
-          Util.PointString( lines[i].GetEndPoint( 0 ) ),
-          Util.PointString( lines[i].GetEndPoint( 1 ) ),
-          Util.PointString( pts[i] ) );
+          wallReferenceIdx, wall.Id.IntegerValue,
+          Util.PointString( lines[wallReferenceIdx].GetEndPoint( 0 ) ),
+          Util.PointString( lines[wallReferenceIdx].GetEndPoint( 1 ) ),
+          Util.PointString( pts[wallReferenceIdx] ) );
 
-        if( 0 < i )
+        if( 0 < wallReferenceIdx )
         {
           // Project dimension point selected on second wall
           // back onto first wall, and ensure that normal
           // points from second wall to first:
 
-          ir = lines[0].Project( pts[1] );
-          if( null == ir )
+          intersections = lines[0].Project( pts[1] );
+          if( null == intersections )
           {
             message = string.Format(
               "Unable to project selected dimension "
@@ -213,10 +209,10 @@ namespace BuildingCoder
 
             return Result.Failed;
           }
-          pts[0] = ir.XYZPoint;
+          pts[0] = intersections.XYZPoint;
         }
 
-        ++i;
+        ++wallReferenceIdx;
       }
 
       XYZ v = pts[0] - pts[1];
@@ -367,7 +363,7 @@ namespace BuildingCoder
 
       CmdDimensionWallsIterateFaces
         .CreateDimensionElement( doc.ActiveView,
-        pts[0], ref2.GetReference(), pts[1], refs.get_Item( 1 ) );
+        pts[0], ref2.GetReference(), pts[1], wallReferences.get_Item( 1 ) );
 
       return Result.Succeeded;
     }
