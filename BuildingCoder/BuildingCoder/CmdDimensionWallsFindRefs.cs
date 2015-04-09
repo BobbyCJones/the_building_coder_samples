@@ -62,19 +62,10 @@ namespace BuildingCoder
       FilteredElementCollector collector
         = new FilteredElementCollector( doc );
 
-      collector.OfClass( typeof( View3D ) );
-
-      foreach( View3D v in collector )
-      {
-        // skip view templates here because they
-        // are invisible in project browsers:
-
-        if( v != null && !v.IsTemplate && v.Name == "{3D}" )
-        {
-          return v;
-        }
-      }
-      return null;
+      return collector.OfClass( typeof( View3D ) ).
+          OfType<View3D>().
+          Where(v => !v.IsTemplate).
+          FirstOrDefault(v => v.Name == "{3D}");
     }
     #endregion // Get3DView
 
